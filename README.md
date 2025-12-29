@@ -4,16 +4,17 @@ import {
   TrendingDown, Clipboard, ShoppingBag, Pill, Scale, Brain, 
   Moon, Footprints, Calendar, Clock, ChevronRight, Zap, 
   CheckCircle, CheckSquare, AlertTriangle, Lock, Unlock, List, Leaf, Info,
-  Copy, RefreshCw, ChevronDown, Plus, Minus, Star, Coffee, Sun, Moon as MoonIcon, Sunset, HelpCircle, Shield, Truck, Repeat, MessageSquare, Eye, EyeOff, FileText, PenTool, Mic
+  Copy, RefreshCw, ChevronDown, Plus, Minus, Star, Coffee, Sun, Moon as MoonIcon, 
+  Sunset, HelpCircle, Shield, Truck, Repeat, MessageSquare, Eye, EyeOff, FileText, 
+  PenTool, Mic, Calculator, Settings, Target, Ruler
 } from 'lucide-react';
 
 /**
- * CENTERVILLE METABOLIC TRANSFORMATION SYSTEM v17.0 (Command Center Edition)
- * Features: Interactive Consult Notes, Expanded Battle Script, CRM Integration
+ * CENTERVILLE METABOLIC TRANSFORMATION SYSTEM v18.1 (Precision Edition)
+ * Features: BMR/TDEE Calculation, Imperial Units, Calorie Overrides, InBody Integration
  */
 
-// --- UTC OFFICIAL FOOD DATABASE (CORRECTED FACTORS) ---
-// Factor = Grams of Macro per 1 Unit
+// --- UTC OFFICIAL FOOD DATABASE ---
 const FOOD_DB = {
   proteins: [
     // Seafood
@@ -49,7 +50,7 @@ const FOOD_DB = {
     { id: 'beans', label: 'Beans/Lentils (Cooked)', factor: 14, unit: 'cup', icon: '🫘' },
   ],
   carbs: [
-    // Grains (Updated Factors)
+    // Grains
     { id: 'rice_jasmine', label: 'Jasmine Rice (Cooked)', factor: 45, unit: 'cup', icon: '🍚', recommended: true },
     { id: 'rice_brown', label: 'Brown Rice (Cooked)', factor: 45, unit: 'cup', icon: '🍚' },
     { id: 'quinoa', label: 'Quinoa (Cooked)', factor: 40, unit: 'cup', icon: '🌾' },
@@ -102,71 +103,57 @@ const FREE_CONDIMENTS = [
   "Coffee/Tea (Black)", "Stevia"
 ];
 
-// --- LOGIC HELPERS ---
-const CPP_TABLE = {
-  female: { ecto: [{max:150,val:11},{max:9999,val:9}], meso: [{max:150,val:10},{max:9999,val:8.5}], endo: [{max:150,val:9},{max:9999,val:7.5}] },
-  male: { ecto: [{max:150,val:12},{max:9999,val:10}], meso: [{max:150,val:11},{max:9999,val:9}], endo: [{max:150,val:10},{max:9999,val:8}] }
-};
+// --- CONSTANTS ---
+const ACTIVITY_MULTIPLIERS = [
+  { value: 1.2, label: 'Sedentary', desc: 'Little or no exercise' },
+  { value: 1.375, label: 'Lightly Active', desc: 'Exercise 1-3 times/week' },
+  { value: 1.55, label: 'Moderately Active', desc: 'Exercise 3-5 times/week' },
+  { value: 1.725, label: 'Very Active', desc: 'Exercise 6-7 times/week' },
+  { value: 1.9, label: 'Extra Active', desc: 'Physical job or 2x training' },
+];
+
 const PROTEIN_TABLE_WOMEN = [{ max: 150, val: 0.8 }, { max: 175, val: 0.75 }, { max: 200, val: 0.7 }, { max: 9999, val: 0.6 }];
 const PROTEIN_TABLE_MEN = [{ max: 200, val: 1.0 }, { max: 225, val: 0.95 }, { max: 250, val: 0.9 }, { max: 9999, val: 0.8 }];
 
-const getRecs = (w, g, b, p) => {
-  const pTable = g === 'female' ? PROTEIN_TABLE_WOMEN : PROTEIN_TABLE_MEN;
-  const pMult = pTable.find(r => w <= r.max)?.val || 0.6;
-  const cTable = CPP_TABLE[g][b];
-  const cppBase = cTable.find(r => w <= r.max)?.val || 10;
-  // DEFICIT LOGIC
-  let deficit = 0;
-  if (p === 'm1-deplete') deficit = 0.25; 
-  else if (p === 'm1-reset') deficit = 0.15; 
-  else if (p === 'm2-lifestyle') deficit = 0.05; 
-  
-  const cpp = cppBase * (1 - deficit);
-  return { pMult, cpp };
+// --- LOGIC HELPERS ---
+const getProteinMultiplier = (weight, gender) => {
+  const pTable = gender === 'female' ? PROTEIN_TABLE_WOMEN : PROTEIN_TABLE_MEN;
+  return pTable.find(r => weight <= r.max)?.val || 0.6;
 };
 
-// --- CONSULTATION SCRIPT DATA (MASTER SOP) ---
+// --- CONSULTATION SCRIPT DATA ---
 const CONSULT_SCRIPT = [
   {
-    step: 1,
-    title: "THE FRAME (AUTHORITY)",
+    step: 1, title: "THE FRAME (AUTHORITY)",
     content: [
       { type: 'say', label: "OPENER", text: "Hey [Name]! Thanks for coming. I want to set the stage so you know exactly what to expect." },
       { type: 'say', label: "THE RULES", text: "Fill this out honestly. Don't sugarcoat it. The more honest you are, the better I can help." },
       { type: 'ask', label: "TIME CHECK", text: "Are you in a rush? We're going to be thorough, takes about 45 mins." },
-      { type: 'action', text: "WALK AWAY. Give them 10 mins alone. Establish control." }
     ]
   },
   {
-    step: 2,
-    title: "RAPPORT & DATA",
+    step: 2, title: "RAPPORT & DATA",
     content: [
       { type: 'ask', label: "F.O.R.D.", text: "Ask about: Family, Occupation, Recreation, Dreams. (Lower anxiety)." },
-      { type: 'ask', label: "WAIST", text: "Grab a waist measurement. 'Think Supermodel Pose'. (Establishes medical frame)." }
+      { type: 'ask', label: "WAIST", text: "Grab a waist measurement. 'Think Supermodel Pose'." }
     ]
   },
   {
-    step: 3,
-    title: "DISCOVERY (THE PAIN)",
+    step: 3, title: "DISCOVERY (THE PAIN)",
     content: [
       { type: 'ask', label: "HAPPINESS GAP", text: "You rated your health a 6. Why that number? Why isn't it a zero?" },
       { type: 'ask', label: "THE DIG", text: "How is this affecting you RIGHT NOW? (Energy? Kids? Focus?)" },
-      { type: 'ask', label: "MAGIC WAND", text: "If I could fix this today, what would that be worth to you?" },
-      { type: 'say', label: "ANCHOR", text: "Priceless? Okay. I ask because some people act like their health is worth $10/mo." }
     ]
   },
   {
-    step: 4,
-    title: "THE GAP (LOGIC)",
+    step: 4, title: "THE GAP (LOGIC)",
     content: [
       { type: 'say', label: "SHOW DATA", text: "Here is where you are [Weight]. Here is healthy [Goal]." },
       { type: 'ask', label: "THE REALITY", text: "When you see those numbers in black and white... what goes through your mind?" },
-      { type: 'ask', label: "AGREEMENT", text: "So the mission is clear. We need to lose X lbs. Agreed?" }
     ]
   },
   {
-    step: 5,
-    title: "THE QUALIFIER",
+    step: 5, title: "THE QUALIFIER",
     content: [
       { type: 'say', label: "FLIP SCRIPT", text: "I can help, but I only work with people who are ready. I need 3 Yeses:" },
       { type: 'ask', label: "Q1", text: "1. Willing to get out of your Comfort Zone?" },
@@ -175,21 +162,10 @@ const CONSULT_SCRIPT = [
     ]
   },
   {
-    step: 6,
-    title: "THE CLOSE (ASSUMPTIVE)",
+    step: 6, title: "THE CLOSE",
     content: [
-      { type: 'say', label: "CONFIDENCE", text: "Awesome. I'm super confident you're going to crush this." },
-      { type: 'say', label: "THE ASK", text: "Last thing: Just confirming we are good to continue your membership after the challenge so you don't lose your spot. It's just $159/mo." },
+      { type: 'say', label: "THE ASK", text: "Just confirming we are good to continue your membership after the challenge. It's just $159/mo." },
       { type: 'action', text: "SHUT UP. Count to 10. First one to speak loses." }
-    ]
-  },
-  {
-    step: 7,
-    title: "OBJECTION BATTLE CARDS",
-    content: [
-      { type: 'if', label: "IF: SILENCE", text: "Fair enough. Look, sign up today to keep momentum. I'll give you a 30-day 'Fair Enough' guarantee. If you don't love it, we part friends." },
-      { type: 'if', label: "IF: SPOUSE", text: "If you went home today and said 'I'm doing this for my health', would they support you?" },
-      { type: 'if', label: "IF: THINK", text: "I get it. But results don't happen in the 'Think About It' zone. Let's start." }
     ]
   }
 ];
@@ -273,11 +249,10 @@ const ConsultAccordion = ({ isOpen, toggle, notes, setNotes }) => {
             </h4>
             {item.content.map((line, idx) => {
                const isAction = line.type === 'action';
-               const isIf = line.type === 'if';
                const isAsk = line.type === 'ask';
                return (
-                 <div key={idx} className={`text-xs mb-2 leading-relaxed ${isAction ? 'text-amber-400 font-bold italic bg-amber-400/10 p-2 rounded' : (isIf ? 'text-red-300 bg-red-500/10 p-2 rounded border border-red-500/20' : 'text-slate-300')}`}>
-                   {line.label && <span className={`font-black uppercase mr-1 tracking-wider ${isAsk ? 'text-cyan-400' : (isIf ? 'text-red-400' : 'text-slate-500')}`}>{line.label}:</span>}
+                 <div key={idx} className={`text-xs mb-2 leading-relaxed ${isAction ? 'text-amber-400 font-bold italic bg-amber-400/10 p-2 rounded' : 'text-slate-300'}`}>
+                   {line.label && <span className={`font-black uppercase mr-1 tracking-wider ${isAsk ? 'text-cyan-400' : 'text-slate-500'}`}>{line.label}:</span>}
                    {line.text}
                  </div>
                );
@@ -288,7 +263,7 @@ const ConsultAccordion = ({ isOpen, toggle, notes, setNotes }) => {
 
       <div className="p-4 bg-slate-900 border-t border-slate-700 shrink-0">
          <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 flex items-center gap-1">
-            <PenTool className="w-3 h-3" /> Consultation Notes (Saved to CRM)
+            <PenTool className="w-3 h-3" /> Consultation Notes
          </label>
          <textarea 
             value={notes} 
@@ -301,6 +276,16 @@ const ConsultAccordion = ({ isOpen, toggle, notes, setNotes }) => {
   );
 };
 
+const InputGroup = ({ label, icon: Icon, children }) => (
+    <div className="flex flex-col space-y-1 mb-3">
+      <label className="text-[9px] font-bold uppercase text-slate-400 flex items-center gap-1">
+        {Icon && <Icon size={12} />}
+        {label}
+      </label>
+      {children}
+    </div>
+);
+
 // --- MAIN APP ---
 
 export default function MTSApp() {
@@ -311,7 +296,22 @@ export default function MTSApp() {
   // INITIAL STATE & PERSISTENCE
   const initialState = {
     client: { 
-      name: "Client Name", weight: 200, gender: "female", bodyType: "endo", bodyFat: 32, smm: 70, bmr: 1600 
+      name: "Client Name", 
+      gender: "female",
+      age: 30, 
+      heightFt: 5, 
+      heightIn: 4, 
+      weight: 150, 
+      activityLevel: 1.55, 
+      bodyType: "endo", // Kept for legacy CPP reference if needed
+      bodyFat: 32
+    },
+    overrides: {
+      mode: 'auto', // 'auto', 'custom_deficit', 'manual_total'
+      deficit: 500,
+      manualTotal: 1800,
+      bmrType: 'calculated', // 'calculated' | 'inbody'
+      inbodyBmr: 1500
     },
     consultNotes: "",
     program: { phase: "m1-deplete", meals: 4 },
@@ -326,20 +326,30 @@ export default function MTSApp() {
   };
 
   const [data, setData] = useState(() => {
-    const saved = localStorage.getItem('mts_data_v17');
-    return saved ? JSON.parse(saved) : initialState;
+    const saved = localStorage.getItem('mts_data_v18');
+    if (saved) {
+        const parsed = JSON.parse(saved);
+        // Migration for new fields
+        if (!parsed.overrides.bmrType) {
+            parsed.overrides.bmrType = 'calculated';
+            parsed.overrides.inbodyBmr = 1500;
+        }
+        return parsed;
+    }
+    return initialState;
   });
 
   const [activeMeal, setActiveMeal] = useState(1);
 
   // Auto-Save Effect
   useEffect(() => {
-    localStorage.setItem('mts_data_v17', JSON.stringify(data));
+    localStorage.setItem('mts_data_v18', JSON.stringify(data));
   }, [data]);
 
   // Convenience Setters
   const setClient = (newClient) => setData(d => ({ ...d, client: newClient }));
   const setProgram = (newProgram) => setData(d => ({ ...d, program: newProgram }));
+  const setOverrides = (newOverrides) => setData(d => ({ ...d, overrides: newOverrides }));
   const setMealSelections = (newSelections) => setData(d => ({ ...d, mealSelections: newSelections }));
   const setConsultNotes = (val) => setData(d => ({ ...d, consultNotes: val }));
 
@@ -357,20 +367,51 @@ export default function MTSApp() {
     }));
   };
 
-  const { client, program, mealSelections, consultNotes } = data;
+  const { client, program, mealSelections, consultNotes, overrides } = data;
+
+  // --- NEW CALCULATIONS (Mifflin-St Jeor or InBody) ---
+  const calculateBMR = () => {
+    if (overrides.bmrType === 'inbody') {
+        return overrides.inbodyBmr || 1500;
+    }
+    // Imperial to Metric
+    const weightKg = client.weight * 0.453592;
+    const heightCm = ((client.heightFt * 12) + client.heightIn) * 2.54;
+    // Mifflin-St Jeor
+    let base = (10 * weightKg) + (6.25 * heightCm) - (5 * client.age);
+    return client.gender === 'male' ? base + 5 : base - 161;
+  };
+
+  const BMR = calculateBMR();
+  const TDEE = Math.round(BMR * client.activityLevel);
+
+  // --- TARGET CALORIES (Override Logic) ---
+  const calculateTargetCalories = () => {
+    if (overrides.mode === 'manual_total') {
+      return overrides.manualTotal;
+    }
+    const adjustment = overrides.mode === 'custom_deficit' ? overrides.deficit : 500; // Auto = 500 deficit
+    return Math.max(1000, Math.round(TDEE - adjustment));
+  };
+
+  const dailyCals = calculateTargetCalories();
+
+  // --- MACRO SPLIT LOGIC ---
+  const pMult = getProteinMultiplier(client.weight, client.gender);
+  const dailyP = client.weight * pMult; // Protein anchored to LBM/Weight
+  
+  // Carb Logic depends on Phase
+  const carbFactor = program.phase === 'm1-deplete' ? 0 : (program.phase === 'm1-reset' ? 0.35 : 0.8);
+  const dailyC = client.weight * carbFactor;
+
+  // Fat Fills the Gap (The Magic Variable)
+  // Calories = (P*4) + (C*4) + (F*9)
+  // F = (Calories - P*4 - C*4) / 9
+  let rawDailyF = (dailyCals - (dailyP * 4) - (dailyC * 4)) / 9;
+  const dailyF = Math.max(25, rawDailyF); // Safety floor of 25g fat
 
   // Constants
   const mealNames = { 1: "Breakfast", 2: "Lunch", 3: "Snack", 4: "Dinner", 5: "Post-Workout", 6: "Snack 2" };
-
-  // Logic
-  const { pMult, cpp } = getRecs(client.weight, client.gender, client.bodyType, program.phase);
-  const dailyP = client.weight * pMult;
-  const dailyCals = client.weight * cpp;
-  const carbFactor = program.phase === 'm1-deplete' ? 0 : (program.phase === 'm1-reset' ? 0.35 : 0.8);
-  const dailyC = client.weight * carbFactor;
-  // Safety Floor for Fats (Ensure at least 30g)
-  let rawDailyF = (dailyCals - (dailyP * 4) - (dailyC * 4)) / 9;
-  const dailyF = Math.max(30, rawDailyF);
   const dailyWater = client.weight / 2;
   
   const targetP = dailyP / program.meals;
@@ -462,7 +503,7 @@ export default function MTSApp() {
 
   // Copy Summary to Clipboard
   const copySummary = () => {
-    const summary = `Client: ${client.name} | Phase: ${program.phase} | P: ${dailyP.toFixed(0)}g | C: ${program.phase==='m1-deplete'?'<30':dailyC.toFixed(0)}g | F: ${dailyF.toFixed(0)}g | Cals: ${dailyCals.toFixed(0)}\nMeals: ${program.meals} | Type: ${client.bodyType} \n\nCONSULT NOTES:\n${consultNotes || 'No notes taken.'}\n\nGenerated via Centerville MTS`;
+    const summary = `Client: ${client.name} | Phase: ${program.phase} | P: ${dailyP.toFixed(0)}g | C: ${program.phase==='m1-deplete'?'<30':dailyC.toFixed(0)}g | F: ${dailyF.toFixed(0)}g | Cals: ${dailyCals.toFixed(0)}\nMeals: ${program.meals} | TDEE: ${TDEE} \n\nCONSULT NOTES:\n${consultNotes || 'No notes taken.'}\n\nGenerated via Centerville MTS`;
     navigator.clipboard.writeText(summary);
     alert("Plan Summary & Consult Notes copied to clipboard for CRM!");
   };
@@ -478,8 +519,8 @@ export default function MTSApp() {
               C
             </div>
             <div>
-              <h1 className="text-xl font-black text-slate-900 tracking-tight uppercase">CFBBC Nutrition System<span className="text-red-600">v1.0</span></h1>
-              <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Metabolic Nutrition Protocol</p>
+              <h1 className="text-xl font-black text-slate-900 tracking-tight uppercase">CFBBC Nutrition System<span className="text-red-600">v18.1</span></h1>
+              <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Precision Metabolic Protocol</p>
             </div>
           </div>
           <div className="flex space-x-4 items-center">
@@ -516,81 +557,187 @@ export default function MTSApp() {
               {/* Visual Gap */}
               <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
                  <div className="flex justify-between items-center mb-6">
-                   <h3 className="font-bold text-slate-800 uppercase text-xs flex items-center"><Activity className="w-4 h-4 mr-2 text-red-600" /> InBody Metrics</h3>
+                   <h3 className="font-bold text-slate-800 uppercase text-xs flex items-center"><User className="w-4 h-4 mr-2 text-red-600" /> Client Profile</h3>
                  </div>
                  
                  {/* Client Name Input */}
-                 <div className="mb-4">
-                    <label className="text-[9px] text-slate-400 uppercase font-bold mb-1 block">Client Name</label>
+                 <InputGroup label="Client Name">
                     <input type="text" value={client.name} onChange={e=>setClient({...client, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 text-sm font-bold focus:border-red-500 outline-none" />
+                 </InputGroup>
+
+                 <div className="grid grid-cols-2 gap-4">
+                   <InputGroup label="Gender" icon={User}>
+                      <select value={client.gender} onChange={e=>setClient({...client, gender: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 text-sm font-bold focus:border-red-500 outline-none">
+                        <option value="female">Female</option>
+                        <option value="male">Male</option>
+                      </select>
+                   </InputGroup>
+                   <InputGroup label="Age" icon={Activity}>
+                      <input type="number" value={client.age} onChange={e=>setClient({...client, age: +e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 text-sm font-bold focus:border-red-500 outline-none" />
+                   </InputGroup>
                  </div>
 
-                 <div className="grid grid-cols-2 gap-4 mb-4">
-                   <div>
-                     <label className="text-[9px] text-slate-400 uppercase font-bold mb-1 block">Gender</label>
-                     <select value={client.gender} onChange={e=>setClient({...client, gender: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 text-sm font-bold focus:border-red-500 outline-none">
-                       <option value="female">Female</option>
-                       <option value="male">Male</option>
-                     </select>
-                   </div>
-                   <div>
-                     <label className="text-[9px] text-slate-400 uppercase font-bold mb-1 block">Body Type</label>
-                     <select value={client.bodyType} onChange={e=>setClient({...client, bodyType: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 text-sm font-bold focus:border-red-500 outline-none">
-                       <option value="endo">Endomorph</option>
-                       <option value="meso">Mesomorph</option>
-                       <option value="ecto">Ectomorph</option>
-                     </select>
-                   </div>
+                 <div className="grid grid-cols-2 gap-4">
+                   <InputGroup label="Height (Ft/In)" icon={Ruler}>
+                     <div className="flex gap-1">
+                       <input type="number" placeholder="ft" value={client.heightFt} onChange={e=>setClient({...client, heightFt: +e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 text-sm font-bold focus:border-red-500 outline-none" />
+                       <input type="number" placeholder="in" value={client.heightIn} onChange={e=>setClient({...client, heightIn: +e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 text-sm font-bold focus:border-red-500 outline-none" />
+                     </div>
+                   </InputGroup>
+                   <InputGroup label="Weight (lbs)" icon={Scale}>
+                      <input type="number" value={client.weight} onChange={e=>setClient({...client, weight: +e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 text-sm font-bold focus:border-red-500 outline-none" />
+                   </InputGroup>
                  </div>
-                 <div className="grid grid-cols-2 gap-4 mb-6">
-                   <div>
-                     <label className="text-[9px] text-slate-400 uppercase font-bold mb-1 block">Weight (lbs)</label>
-                     <input type="number" value={client.weight} onChange={e=>setClient({...client, weight: +e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 text-sm font-bold focus:border-red-500 outline-none" />
-                   </div>
-                   <div>
-                     <label className="text-[9px] text-slate-400 uppercase font-bold mb-1 block">Body Fat %</label>
-                     <input type="number" value={client.bodyFat} onChange={e=>setClient({...client, bodyFat: +e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 text-sm font-bold focus:border-red-500 outline-none" />
-                   </div>
+
+                 <div className="mt-2">
+                   <InputGroup label="Activity Level" icon={Flame}>
+                     <select value={client.activityLevel} onChange={e=>setClient({...client, activityLevel: +e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 text-sm font-bold focus:border-red-500 outline-none">
+                       {ACTIVITY_MULTIPLIERS.map(a => (
+                         <option key={a.value} value={a.value}>{a.label}</option>
+                       ))}
+                     </select>
+                   </InputGroup>
                  </div>
-                 
-                 {/* MEALS PER DAY SELECTOR */}
-                 <div className="mb-6">
-                    <label className="text-[9px] text-slate-400 uppercase font-bold mb-1 block">Meals Per Day</label>
-                    <div className="flex bg-slate-100 rounded-lg p-1">
-                      {[3, 4, 5, 6].map(num => (
-                        <button 
-                          key={num}
-                          onClick={() => setProgram({...program, meals: num})}
-                          className={`flex-1 py-2 text-xs font-bold rounded transition-all ${program.meals === num ? 'bg-white shadow text-red-600' : 'text-slate-400 hover:text-slate-600'}`}
-                        >
-                          {num}
-                        </button>
-                      ))}
+
+                 {/* BMR OVERRIDE */}
+                 <div className="mt-4 border-t border-slate-100 pt-4">
+                    <div className="flex justify-between items-center mb-2">
+                        <label className="text-[9px] font-bold uppercase text-slate-400 flex items-center gap-1">
+                            <Activity size={12} /> BMR Source
+                        </label>
+                        <div className="flex bg-slate-100 p-0.5 rounded text-[10px]">
+                            <button 
+                                onClick={() => setOverrides({...overrides, bmrType: 'calculated'})}
+                                className={`px-2 py-1 rounded ${overrides.bmrType !== 'inbody' ? 'bg-white shadow text-slate-900 font-bold' : 'text-slate-400'}`}
+                            >
+                                Auto
+                            </button>
+                            <button 
+                                onClick={() => setOverrides({...overrides, bmrType: 'inbody'})}
+                                className={`px-2 py-1 rounded ${overrides.bmrType === 'inbody' ? 'bg-white shadow text-blue-600 font-bold' : 'text-slate-400'}`}
+                            >
+                                InBody
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {overrides.bmrType === 'inbody' && (
+                        <input 
+                            type="number" 
+                            value={overrides.inbodyBmr}
+                            onChange={(e) => setOverrides({...overrides, inbodyBmr: +e.target.value})}
+                            className="w-full bg-blue-50 border border-blue-200 rounded-lg p-2 text-blue-900 text-sm font-bold focus:border-blue-500 outline-none mb-2"
+                            placeholder="Enter InBody BMR..."
+                        />
+                    )}
+                 </div>
+
+                 {/* Calculated Metrics */}
+                 <div className="p-3 bg-slate-100 rounded-lg flex justify-between items-center text-xs">
+                    <div>
+                      <div className="font-bold text-slate-500 uppercase text-[10px]">BMR ({overrides.bmrType === 'inbody' ? 'Manual' : 'Calc'})</div>
+                      <div className="font-mono font-black text-slate-900">{Math.round(BMR)}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-slate-500 uppercase text-[10px]">TDEE</div>
+                      <div className="font-mono font-black text-slate-900">{TDEE}</div>
                     </div>
                  </div>
-
-                 {/* SHOPPING DAYS SLIDER */}
-                 <div className="mb-2">
-                    <label className="text-[9px] text-slate-400 uppercase font-bold mb-1 block">Shopping List Duration</label>
-                    <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                        <input 
-                          type="range" min="1" max="14" 
-                          value={shoppingDays} 
-                          onChange={(e) => setShoppingDays(parseInt(e.target.value))}
-                          className="w-full accent-red-600 cursor-pointer"
-                        />
-                        <span className="font-black text-sm w-16 text-right text-slate-700">{shoppingDays} Days</span>
+                 
+                 <div className="mt-4 pt-4 border-t border-slate-100">
+                    <div className="grid grid-cols-2 gap-4">
+                       <InputGroup label="Meals Per Day">
+                          <div className="flex bg-slate-100 rounded-lg p-1">
+                            {[3, 4, 5, 6].map(num => (
+                              <button 
+                                key={num}
+                                onClick={() => setProgram({...program, meals: num})}
+                                className={`flex-1 py-1 text-xs font-bold rounded transition-all ${program.meals === num ? 'bg-white shadow text-red-600' : 'text-slate-400 hover:text-slate-600'}`}
+                              >
+                                {num}
+                              </button>
+                            ))}
+                          </div>
+                       </InputGroup>
+                       <InputGroup label="Shop Days">
+                          <input 
+                            type="number" min="1" max="14" 
+                            value={shoppingDays} 
+                            onChange={(e) => setShoppingDays(parseInt(e.target.value))}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 text-sm font-bold focus:border-red-500 outline-none"
+                          />
+                       </InputGroup>
                     </div>
                  </div>
 
               </div>
 
+              {/* CALORIE OVERRIDE COMMAND CENTER */}
+              <div className="bg-white border border-slate-200 border-l-4 border-l-purple-500 rounded-2xl p-6 shadow-sm">
+                 <div className="flex justify-between items-center mb-4">
+                   <h3 className="font-bold text-slate-800 uppercase text-xs flex items-center"><Settings className="w-4 h-4 mr-2 text-purple-600" /> Calorie Command</h3>
+                 </div>
+
+                 <div className="flex bg-slate-100 p-1 rounded-lg mb-4">
+                    {[
+                      {id: 'auto', label: 'Auto Deficit'},
+                      {id: 'custom_deficit', label: 'Custom'},
+                      {id: 'manual_total', label: 'Manual Set'}
+                    ].map(m => (
+                      <button
+                        key={m.id}
+                        onClick={() => setOverrides({...overrides, mode: m.id})}
+                        className={`flex-1 py-2 text-[10px] font-bold uppercase rounded-md transition-all ${overrides.mode === m.id ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-400'}`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                 </div>
+
+                 {overrides.mode === 'auto' && (
+                    <div className="text-xs text-slate-500 italic p-2 bg-purple-50 rounded border border-purple-100">
+                      Auto-calculating a standard <span className="font-bold text-purple-700">500 calorie deficit</span> from TDEE.
+                    </div>
+                 )}
+
+                 {overrides.mode === 'custom_deficit' && (
+                    <div className="flex items-center gap-3">
+                       <label className="text-xs font-bold text-slate-600">Deficit Amount:</label>
+                       <input 
+                         type="number" 
+                         value={overrides.deficit}
+                         onChange={(e) => setOverrides({...overrides, deficit: +e.target.value})}
+                         className="flex-1 bg-white border border-purple-200 rounded p-2 text-right font-bold text-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                       />
+                       <span className="text-xs text-slate-400">kcal</span>
+                    </div>
+                 )}
+
+                 {overrides.mode === 'manual_total' && (
+                    <div className="flex items-center gap-3">
+                       <label className="text-xs font-bold text-slate-600">Force Total:</label>
+                       <input 
+                         type="number" 
+                         value={overrides.manualTotal}
+                         onChange={(e) => setOverrides({...overrides, manualTotal: +e.target.value})}
+                         className="flex-1 bg-white border border-purple-200 rounded p-2 text-right font-bold text-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                       />
+                       <span className="text-xs text-slate-400">kcal</span>
+                    </div>
+                 )}
+
+                 <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center">
+                    <span className="text-xs font-black uppercase text-slate-400">Final Target</span>
+                    <span className="text-2xl font-black text-purple-600">{dailyCals}</span>
+                 </div>
+              </div>
+
               {/* Phase Selector */}
               <div className="grid grid-cols-1 gap-2">
                  {[
-                   {id: 'm1-deplete', l: 'Phase 1: Adaptation', sub: 'Restore Sensitivity (25% Deficit)', c: 'red', info: 'We are depleting glycogen to force your liver to switch from burning sugar to burning fat. This is non-negotiable for 14 days.'},
-                   {id: 'm1-reset', l: 'Phase 2: Acceleration', sub: 'Fuel Performance (15% Deficit)', c: 'blue', info: 'Reintroducing carbs strategically to restore leptin levels and fuel training performance.'},
-                   {id: 'm2-lifestyle', l: 'Phase 3: Lifestyle', sub: 'Metabolic Flex (Maintenance)', c: 'green', info: 'Optimized for long-term sustainability and metabolic flexibility.'},
+                   {id: 'm1-deplete', l: 'Phase 1: Adaptation', sub: 'Restore Sensitivity (Trace Carbs)', c: 'red'},
+                   {id: 'm1-reset', l: 'Phase 2: Acceleration', sub: 'Fuel Performance (Mod Carbs)', c: 'blue'},
+                   {id: 'm2-lifestyle', l: 'Phase 3: Lifestyle', sub: 'Metabolic Flex (High Carbs)', c: 'green'},
                  ].map(p => (
                    <div key={p.id} className="relative group">
                      <button 
@@ -677,17 +824,17 @@ export default function MTSApp() {
                 {/* Result Cards (Visible in Coach Mode) */}
                 {mode === 'coach' && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
-                     <MacroDisplay label="Protein" amount={pData.val} unit={pData.unit} foodName={pData.label} color="blue" subtext={`Target: ${targetP.toFixed(0)}g`} />
-                     <MacroDisplay 
-                       label="Carbs" 
-                       amount={cData.val} 
-                       unit={cData.unit} 
-                       foodName={program.phase === 'm1-deplete' ? "Trace Veggies Only" : cData.label} 
-                       color="green" 
-                       subtext={program.phase === 'm1-deplete' ? "Phase 1 Protocol" : `Target: ${targetC.toFixed(0)}g`} 
-                       isPhase1Carb={program.phase === 'm1-deplete'}
-                     />
-                     <MacroDisplay label="Fats" amount={fData.val} unit={fData.unit} foodName={fData.label} color="yellow" subtext={`Target: ${targetF.toFixed(0)}g`} />
+                      <MacroDisplay label="Protein" amount={pData.val} unit={pData.unit} foodName={pData.label} color="blue" subtext={`Target: ${targetP.toFixed(0)}g`} />
+                      <MacroDisplay 
+                        label="Carbs" 
+                        amount={cData.val} 
+                        unit={cData.unit} 
+                        foodName={program.phase === 'm1-deplete' ? "Trace Veggies Only" : cData.label} 
+                        color="green" 
+                        subtext={program.phase === 'm1-deplete' ? "Phase 1 Protocol" : `Target: ${targetC.toFixed(0)}g`} 
+                        isPhase1Carb={program.phase === 'm1-deplete'}
+                      />
+                      <MacroDisplay label="Fats" amount={fData.val} unit={fData.unit} foodName={fData.label} color="yellow" subtext={`Target: ${targetF.toFixed(0)}g (Adjusts to Cals)`} />
                   </div>
                 )}
 
