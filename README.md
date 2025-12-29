@@ -478,8 +478,8 @@ export default function MTSApp() {
               C
             </div>
             <div>
-              <h1 className="text-xl font-black text-slate-900 tracking-tight uppercase">Centerville MTS <span className="text-red-600">v17.0</span></h1>
-              <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Performance Nutrition Protocol</p>
+              <h1 className="text-xl font-black text-slate-900 tracking-tight uppercase">CFBBC Nutrition System<span className="text-red-600">v1.0</span></h1>
+              <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Metabolic Nutrition Protocol</p>
             </div>
           </div>
           <div className="flex space-x-4 items-center">
